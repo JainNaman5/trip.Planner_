@@ -24,39 +24,22 @@ st.set_page_config(
 
 # ----------------- SIDEBAR -----------------
 st.sidebar.markdown("# ✈️ Trip Settings")
-theme_mode = st.sidebar.toggle("🌙 Dark Mode", value=True, help="Toggle between premium Light and Dark mode aesthetics.")
 
-# CSS Variables based on Theme selection
-if theme_mode: # Dark Mode
-    body_bg = "#0f172a"
-    card_bg = "linear-gradient(135deg, #1e293b, #0f172a)"
-    card_text = "#ffffff"
-    card_desc = "#e2e8f0"
-    card_sub = "#cbd5e1"
-    kpi_bg = "#1e293b"
-    kpi_text = "#ffffff"
-    kpi_sub = "#94a3b8"
-    kpi_border = "#334155"
-    table_th_bg = "#1e293b"
-    table_th_text = "#ffffff"
-    body_text_color = "#f8fafc"
-    sidebar_bg = "#0f172a"
-    sidebar_text = "#ffffff"
-else: # Light Mode
-    body_bg = "#ffffff"
-    card_bg = "linear-gradient(135deg, #fffaf4, #fff3e3)"
-    card_text = "#1f2937"
-    card_desc = "#4b5563"
-    card_sub = "#4b5563"
-    kpi_bg = "#ffffff"
-    kpi_text = "#111827"
-    kpi_sub = "#6b7280"
-    kpi_border = "#e5e7eb"
-    table_th_bg = "#f3f4f6"
-    table_th_text = "#111827"
-    body_text_color = "#1f2937"
-    sidebar_bg = "#f8fafc"
-    sidebar_text = "#1f2937"
+# CSS Variables for Premium Dark Mode Theme
+body_bg = "#0f172a"
+card_bg = "linear-gradient(135deg, #1e293b, #0f172a)"
+card_text = "#ffffff"
+card_desc = "#e2e8f0"
+card_sub = "#cbd5e1"
+kpi_bg = "#1e293b"
+kpi_text = "#ffffff"
+kpi_sub = "#94a3b8"
+kpi_border = "#334155"
+table_th_bg = "#1e293b"
+table_th_text = "#ffffff"
+body_text_color = "#f8fafc"
+sidebar_bg = "#0f172a"
+sidebar_text = "#ffffff"
 
 # Custom Styling / CSS for Premium Indian Heritage Aesthetics
 st.markdown(f"""
@@ -336,7 +319,7 @@ with st.sidebar.expander("🔑 Gemini AI Key (Optional)", expanded=False):
 # ----------------- MAIN APP CONTENT -----------------
 
 # Page Header
-st.markdown('<h1 class="header-title">🇮🇳 Incredible India Trip Planner</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="header-title"><img src="https://flagcdn.com/w40/in.png" width="40" style="margin-right: 15px; vertical-align: middle; border-radius: 4px;">Incredible India Trip Planner</h1>', unsafe_allow_html=True)
 st.markdown('<p class="header-subtitle">Plan schedules, map landmarks, and estimate budgets in a heartbeat.</p>', unsafe_allow_html=True)
 
 # Destination Profile Hero Block
@@ -499,11 +482,11 @@ with tab_cost:
     col_v1, col_v2 = st.columns([1, 1])
     
     with col_v1:
-        pie_fig = get_pie_chart(cost_res, theme="dark" if theme_mode else "light")
+        pie_fig = get_pie_chart(cost_res, theme="dark")
         st.plotly_chart(pie_fig, use_container_width=True)
         
     with col_v2:
-        comp_fig = get_comparison_chart(dest, trip_days, traveler_count, theme="dark" if theme_mode else "light")
+        comp_fig = get_comparison_chart(dest, trip_days, traveler_count, theme="dark")
         st.plotly_chart(comp_fig, use_container_width=True)
         
     # Cost items tabular breakdown
