@@ -33,9 +33,19 @@ def calculate_costs(destination_data, days, travelers, budget):
         total_transport = daily_transport * days
         
     # 4. Activities & Entry Fees:
-    # Assume 1.5 attraction visits per day on average per person
-    activity_base = costs_meta["activity_avg"]
-    total_activities = int(activity_base * 1.5 * days * travelers)
+    # Calculated dynamically based on the actual entry fees of the attractions visited (2 per day).
+    attractions = destination_data.get("attractions", [])
+    num_attractions = len(attractions)
+    if num_attractions > 0:
+        actual_activities_cost = 0
+        for d in range(1, days + 1):
+            att_idx_1 = ((d - 1) * 2) % num_attractions
+            att_idx_2 = ((d - 1) * 2 + 1) % num_attractions
+            actual_activities_cost += attractions[att_idx_1].get("fee", 0) + attractions[att_idx_2].get("fee", 0)
+        total_activities = actual_activities_cost * travelers
+    else:
+        activity_base = costs_meta.get("activity_avg", 300)
+        total_activities = int(activity_base * 1.5 * days * travelers)
     
     # Subtotal
     subtotal = total_accommodation + total_food + total_transport + total_activities

@@ -1,22 +1,35 @@
 # app.py
 """
-Trip Planner - Main Streamlit Application
+AI Travel Planner - Main Streamlit Application
 Interactive Python-only travel application featuring curated Indian datasets,
 AI itinerary planning via Google Gemini, dynamic folium mapping, and plotly cost visualizations.
 """
 import streamlit as st
 import pandas as pd
+import random
 import folium
 from streamlit_folium import st_folium
 
 # Import local modules
+import dataset
+import planner
+import cost_estimator
+import recommender
+import importlib
+
+importlib.reload(dataset)
+importlib.reload(planner)
+importlib.reload(cost_estimator)
+importlib.reload(recommender)
+
 from dataset import DESTINATIONS
 from planner import generate_ai_itinerary
 from cost_estimator import calculate_costs, get_pie_chart, get_comparison_chart
+from recommender import get_recommendations
 
 # Page Setup
 st.set_page_config(
-    page_title="Trip Planner - Incredible India",
+    page_title="AI Travel Planner - Incredible India",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -44,7 +57,7 @@ sidebar_text = "#ffffff"
 # Custom Styling / CSS for Premium Indian Heritage Aesthetics
 st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
         
         /* Main background */
         .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainViewContainer"] {{
@@ -54,8 +67,12 @@ st.markdown(f"""
         
         /* Apply fonts globally */
         html, body, [class*="css"], .stMarkdown {{
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             color: {body_text_color};
+        }}
+        
+        h1, h2, h3, h4, h5, h6, .header-title {{
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         }}
         
         /* Text color overrides */
@@ -262,17 +279,18 @@ dest_options = sorted(list(DESTINATIONS.keys()))
 selected_city = st.sidebar.selectbox(
     "Choose Destination City",
     options=dest_options,
-    index=0,
+    index=None,
+    placeholder="Select Destination City...",
     help="Select an Indian city to plan your trip."
 )
-dest = DESTINATIONS[selected_city]
+dest = DESTINATIONS[selected_city] if selected_city is not None else None
 
 # Duration Selector
 trip_days = st.sidebar.slider(
     "Trip Duration (Days)",
     min_value=1,
     max_value=14,
-    value=3,
+    value=1,
     step=1,
     help="Number of days you want to plan for."
 )
@@ -299,7 +317,8 @@ traveler_count = st.sidebar.number_input(
 group_type = st.sidebar.selectbox(
     "Group Profile",
     options=["Solo", "Couple", "Family", "Friends"],
-    index=1,
+    index=None,
+    placeholder="Select Group Profile...",
     help="Helps the AI customize suggested activities."
 )
 
@@ -319,8 +338,20 @@ with st.sidebar.expander("🔑 Gemini AI Key (Optional)", expanded=False):
 # ----------------- MAIN APP CONTENT -----------------
 
 # Page Header
-st.markdown('<h1 class="header-title"><img src="https://flagcdn.com/w40/in.png" width="40" style="margin-right: 15px; vertical-align: middle; border-radius: 4px;">Incredible India Trip Planner</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="header-title"><img src="https://flagcdn.com/w40/in.png" width="40" style="margin-right: 15px; vertical-align: middle; border-radius: 4px;">Incredible India AI Travel Planner</h1>', unsafe_allow_html=True)
 st.markdown('<p class="header-subtitle">Plan schedules, map landmarks, and estimate budgets in a heartbeat.</p>', unsafe_allow_html=True)
+
+if dest is None:
+    st.info("👈 Please select a Destination City in the sidebar to start planning your trip.")
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 40px; border-radius: 16px; border-left: 6px solid #FF9933; text-align: center; margin-top: 20px;">
+            <h2 style="color: #ffffff; margin-bottom: 15px;">✨ Begin Your Indian Adventure</h2>
+            <p style="color: #cbd5e1; font-size: 1.1rem; line-height: 1.6;">
+                Select a city from the dropdown on the left to explore top sightseeing locations, map landmarks, generate AI-powered daily itineraries, calculate estimated trip expenses, and receive similarity-based recommendations.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 # Destination Profile Hero Block
 st.markdown(f"""
@@ -336,10 +367,11 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Layout: Tabs
-tab_explore, tab_itinerary, tab_cost = st.tabs([
+tab_explore, tab_itinerary, tab_cost, tab_recommender = st.tabs([
     "🗺️ Explore & Interactive Map",
     "🗓️ AI Travel Itinerary",
-    "💰 Estimated Costs & Charts"
+    "💰 Estimated Costs & Charts",
+    "🎯 Recommended Destinations"
 ])
 
 # ----------------- TAB 1: EXPLORE & MAP -----------------
@@ -406,27 +438,39 @@ with tab_explore:
 
 # ----------------- TAB 2: AI ITINERARY -----------------
 with tab_itinerary:
-    st.subheader("🤖 AI-Generated Day-by-Day Travel Plan")
-    
-    # Check if we should call Gemini or Fallback
-    if not api_key:
-        st.info("ℹ️ Using standard rule-based itinerary. Enter a **Google Gemini API Key** in the sidebar for a fully customized, AI-personalized itinerary!")
-    else:
-        st.success("🤖 Google Gemini API Key loaded. Generating bespoke travel itinerary...")
+    if "itinerary_seed" not in st.session_state:
+        st.session_state.itinerary_seed = 42
 
-    # Display itinerary
-    with st.spinner("Compiling travel logistics and mapping sightseeing schedules..."):
-        itinerary_md = generate_ai_itinerary(dest, trip_days, budget_tier, group_type, api_key)
+    col_title, col_btn = st.columns([2, 1])
+    with col_title:
+        st.subheader("🤖 AI-Generated Day-by-Day Travel Plan")
+    with col_btn:
+        if st.button("🔄 Generate Itinerary Variation", help="Generate a different version of the itinerary"):
+            st.session_state.itinerary_seed = random.randint(100, 999)
+            st.rerun()
+            
+    if group_type is None:
+        st.warning("⚠️ Please select a Group Profile in the sidebar to generate your itinerary.")
+    else:
+        # Check if we should call Gemini or Fallback
+        if not api_key:
+            st.info("ℹ️ Using standard rule-based itinerary. Enter a **Google Gemini API Key** in the sidebar for a fully customized, AI-personalized itinerary!")
+        else:
+            st.success("🤖 Google Gemini API Key loaded. Generating bespoke travel itinerary...")
+
+        # Display itinerary
+        with st.spinner("Compiling travel logistics and mapping sightseeing schedules..."):
+            itinerary_md = generate_ai_itinerary(dest, trip_days, budget_tier, group_type, api_key, seed=st.session_state.itinerary_seed)
+            
+        st.markdown(itinerary_md)
         
-    st.markdown(itinerary_md)
-    
-    # Add Download button
-    st.download_button(
-        label="📥 Download Itinerary as File",
-        data=itinerary_md,
-        file_name=f"Itinerary_{dest['name']}_{trip_days}days.md",
-        mime="text/markdown"
-    )
+        # Add Download button
+        st.download_button(
+            label="📥 Download Itinerary as File",
+            data=itinerary_md,
+            file_name=f"Itinerary_{dest['name']}_{trip_days}days.md",
+            mime="text/markdown"
+        )
 
 # ----------------- TAB 3: COST ESTIMATOR -----------------
 with tab_cost:
@@ -468,11 +512,12 @@ with tab_cost:
         """, unsafe_allow_html=True)
         
     with kpi4:
+        group_type_display = group_type if group_type is not None else "Not Selected"
         st.markdown(f"""
             <div class="kpi-box">
                 <div class="kpi-label">Travel Style Class</div>
                 <div class="kpi-value" style="color: #ff9933;">{budget_tier}</div>
-                <div class="kpi-sub">{group_type} Group Type</div>
+                <div class="kpi-sub">{group_type_display} Group Type</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -514,7 +559,7 @@ with tab_cost:
     costs_table["Estimated Cost (₹)"].append(f"₹{cost_res['Local Transport']:,}")
     
     costs_table["Expense Category"].append("Activities & Landmark entry")
-    costs_table["Calculation Details"].append(f"Avg fee ₹{dest['costs']['activity_avg']} per spot × 1.5 spots/day × {traveler_count} traveler(s) × {trip_days} day(s)")
+    costs_table["Calculation Details"].append(f"Sum of actual entrance fees of scheduled spots (2 per day) × {traveler_count} traveler(s)")
     costs_table["Estimated Cost (₹)"].append(f"₹{cost_res['Activities & Entry Fees']:,}")
     
     costs_table["Expense Category"].append("Emergency Buffer / Misc Shopping")
@@ -527,3 +572,34 @@ with tab_cost:
     
     costs_df = pd.DataFrame(costs_table)
     st.table(costs_df)
+
+# ----------------- TAB 4: RECOMMENDER -----------------
+with tab_recommender:
+    st.subheader(f"🎯 Destination Recommendations Similar to {dest['name']}")
+    st.markdown(
+        f"Using Machine Learning (TF-IDF & Cosine Similarity), we have analyzed destination attributes to find the best alternative matches for **{dest['name']}**."
+    )
+    
+    with st.spinner("Processing ML similarity vectors..."):
+        recommendations = get_recommendations(selected_city, DESTINATIONS, top_n=3)
+        
+    if recommendations:
+        rec_cols = st.columns(3)
+        for idx, (rec_name, score, reason) in enumerate(recommendations):
+            rec_dest = DESTINATIONS[rec_name]
+            with rec_cols[idx]:
+                st.markdown(f"""
+                    <div class="dest-card" style="border-left: 6px solid #138808; padding: 20px; min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div class="dest-state" style="font-size: 0.8rem; margin-bottom: 5px;">{rec_dest['state']} • {rec_dest['region']}</div>
+                            <div class="dest-title" style="font-size: 1.5rem; margin-bottom: 8px;">{rec_dest['name']}</div>
+                            <div class="dest-desc" style="font-size: 0.9rem; line-height: 1.4; height: 100px; overflow: hidden; text-overflow: ellipsis; margin-bottom: 12px;">{rec_dest['description']}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #138808; margin-bottom: 8px;">🎯 {score}% Match</div>
+                            <div style="font-size: 0.85rem; color: #94a3b8; font-style: italic;">Reason: {reason}</div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No recommendations found.")

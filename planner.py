@@ -7,62 +7,108 @@ with a robust fallback generator for offline / key-less runs.
 import google.generativeai as genai
 import random
 
-def get_fallback_itinerary(destination_data, days, budget, group_type):
+def get_fallback_itinerary(destination_data, days, budget, group_type, seed=42):
     """
     Generates a high-quality, structured rule-based itinerary
     when no Gemini API key is available.
+    Uses seeded randomization to offer dynamic variation.
     """
-    attractions = destination_data["attractions"]
+    rng = random.Random(seed)
+    attractions = list(destination_data["attractions"])
     num_attractions = len(attractions)
     
-    markdown = f"### 📅 Custom {days}-Day Itinerary for {destination_data['name']} ({group_type} - {budget} Tier)\n\n"
-    markdown += "*Note: Showing a pre-planned schedule (No Gemini API Key provided. Enter a key in the sidebar for full AI personalization).* \n\n"
+    # Shuffle attractions so that different seeds result in different daily plans
+    rng.shuffle(attractions)
+    
+    markdown = f"### 📅 Custom {days}-Day Itinerary for {destination_data['name']} ({group_type if group_type else 'Custom'} - {budget} Tier)\n\n"
+    markdown += f"*Note: Showing a dynamic pre-planned schedule (Seed: {seed}). Enter a Gemini API Key in the sidebar for full AI personalization.* \n\n"
     
     # Tips block
     markdown += "> **💡 Local Tips for your Trip:**\n"
     markdown += f"> - **Best Time:** The ideal time to visit is during **{destination_data['best_season']}**.\n"
     markdown += f"> - **Vibe:** This is a **{destination_data['category']}** style destination.\n"
-    markdown += "> - **Travel Strategy:** Start your days early around 8:30 AM to beat the crowd and midday heat.\n\n"
+    
+    local_tips = [
+        "Start your days early around 8:30 AM to beat the crowd and midday heat.",
+        "Keep local currency (INR) in small denominations for local vendors and rickshaws.",
+        "Hire local registered guides at monuments for the best historical stories.",
+        "Dress respectfully when visiting religious and spiritual monuments.",
+        "Carry a water bottle and sunglasses to stay hydrated and protected from the sun."
+    ]
+    # Select 2 random tips using seeded rng
+    selected_tips = rng.sample(local_tips, min(len(local_tips), 2))
+    for tip in selected_tips:
+        markdown += f"> - **Local Tip:** {tip}\n"
+    markdown += "\n"
+    
+    # Templates for descriptions to add variation
+    morning_templates = [
+        "Head out early to visit **{name}** ({type}). Expect about 2 hours to explore the beautiful premises.",
+        "Start your morning with a pleasant excursion to **{name}** ({type}), taking in the peaceful surroundings.",
+        "Begin your day by exploring the historic and cultural beauty of **{name}** ({type})."
+    ]
+    
+    afternoon_templates = [
+        "Make your way to **{name}** ({type}). This is the perfect spot to capture stunning photos.",
+        "Head over to **{name}** ({type}) to learn more about the local heritage and architectural marvels.",
+        "Spend your afternoon visiting the popular landmark **{name}** ({type}), walking through its unique exhibits."
+    ]
+    
+    dining_options = {
+        "Budget": [
+            "Dine at a popular local street food spot or local dhaba. Try regional dishes like local thali or street specialties for ₹150-₹250 per person.",
+            "Grab a quick, delicious bite at a budget-friendly local eatery. Try samosas, local chaat, or regional snacks for under ₹200.",
+            "Enjoy a comforting meal at a local vegetarian mess, savoring authentic regional dishes for ₹150 per plate."
+        ],
+        "Mid-Range": [
+            "Eat at a highly-rated family restaurant or cafe. Enjoy authentic local cuisine in a cozy atmosphere for ₹400-₹600 per person.",
+            "Dine at a popular local bistro or modern cafe. Try their chef's special regional platters and local beverages for ₹500.",
+            "Visit a popular casual dining spot known for its regional delicacies and warm hospitality, costing ₹400-₹700 per person."
+        ],
+        "Luxury": [
+            "Book a table at a premium fine dining heritage restaurant. Enjoy luxury dining and curated multi-course specialties for ₹1500+ per person.",
+            "Indulge in a premium multi-cuisine buffet or fine dining experience at a luxury hotel restaurant for ₹2000+ per person.",
+            "Treat yourself to a signature royal dining experience featuring traditional heritage recipes served in a luxury courtyard-style setting."
+        ]
+    }
     
     # Generate schedule per day
     for day in range(1, days + 1):
         markdown += f"#### 🌅 Day {day}: Exploring {destination_data['name']}\n"
         
         # Select attractions for this day
-        # We will loop or distribute attractions based on day index
-        att_idx_1 = ((day - 1) * 2) % num_attractions
-        att_idx_2 = ((day - 1) * 2 + 1) % num_attractions
-        
-        a1 = attractions[att_idx_1]
-        a2 = attractions[att_idx_2]
-        
-        # Day themes
+        if num_attractions > 0:
+            att_idx_1 = ((day - 1) * 2) % num_attractions
+            att_idx_2 = ((day - 1) * 2 + 1) % num_attractions
+            a1 = attractions[att_idx_1]
+            a2 = attractions[att_idx_2]
+        else:
+            a1 = {"name": "Local Marketplace", "type": "Sightseeing", "fee": 0}
+            a2 = {"name": "City Viewpoint", "type": "Scenic Point", "fee": 0}
+            
         themes = ["Heritage and Landmarks", "Local Sightseeing and Walks", "Culture and Scenic Exploration", "Offbeat & Leisure Time"]
         theme = themes[(day - 1) % len(themes)]
         markdown += f"**Theme:** *{theme}*\n\n"
         
         # Morning Activity
-        markdown += f"- **09:00 AM - Morning Visit: {a1['name']} ({a1['type']})**\n"
-        markdown += f"  - Head out early to visit **{a1['name']}**. Expect about 2 hours here. "
-        if a1['fee'] > 0:
+        m_template = rng.choice(morning_templates)
+        markdown += f"- **09:00 AM - Morning Visit: {a1['name']}**\n"
+        markdown += f"  - {m_template.format(name=a1['name'], type=a1['type'])} "
+        if a1.get('fee', 0) > 0:
             markdown += f"Note: Entry fee is approx. ₹{a1['fee']} per person.\n"
         else:
             markdown += "Note: Free entry.\n"
         markdown += "  - *Tip:* Wear comfortable walking shoes.\n\n"
         
         # Lunch Activity
-        markdown += "- **01:00 PM - Lunch Break**\n"
-        if budget == "Budget":
-            markdown += "  - Dine at a popular local street food spot or local dhaba. Try regional dishes like local thali or street specialties for ₹150-₹250 per person.\n\n"
-        elif budget == "Mid-Range":
-            markdown += "  - Eat at a highly-rated family restaurant or cafe. Enjoy authentic local cuisine in a cozy atmosphere for ₹400-₹600 per person.\n\n"
-        else: # Luxury
-            markdown += "  - Book a table at a premium fine dining heritage restaurant. Enjoy luxury dining and curated multi-course specialties for ₹1500+ per person.\n\n"
+        lunch_choice = rng.choice(dining_options[budget])
+        markdown += f"- **01:00 PM - Lunch Break**\n  - {lunch_choice}\n\n"
             
         # Afternoon Activity
-        markdown += f"- **03:00 PM - Afternoon Sightseeing: {a2['name']} ({a2['type']})**\n"
-        markdown += f"  - Make your way to **{a2['name']}**. Perfect spot to learn about local history or capture stunning scenic photos. "
-        if a2['fee'] > 0:
+        a_template = rng.choice(afternoon_templates)
+        markdown += f"- **03:00 PM - Afternoon Sightseeing: {a2['name']}**\n"
+        markdown += f"  - {a_template.format(name=a2['name'], type=a2['type'])} "
+        if a2.get('fee', 0) > 0:
             markdown += f"Entry fee is ₹{a2['fee']}.\n"
         else:
             markdown += "Entry is free.\n"
@@ -80,13 +126,14 @@ def get_fallback_itinerary(destination_data, days, budget, group_type):
         
     return markdown
 
-def generate_ai_itinerary(destination_data, days, budget, group_type, api_key=None):
+def generate_ai_itinerary(destination_data, days, budget, group_type, api_key=None, seed=42):
     """
     Attempts to generate a highly detailed, personalized travel plan
     using Google Gemini API, falling back to local generation if unsuccessful or if no key.
+    Uses temperature and dynamic prompt suffix to force variation based on seed.
     """
     if not api_key:
-        return get_fallback_itinerary(destination_data, days, budget, group_type)
+        return get_fallback_itinerary(destination_data, days, budget, group_type, seed)
         
     try:
         genai.configure(api_key=api_key)
@@ -102,11 +149,11 @@ Trip Details:
 - Destination: {destination_data['name']} (Category: {destination_data['category']})
 - Duration: {days} days
 - Budget Category: {budget}
-- Traveler Profile: {group_type}
+- Traveler Profile: {group_type if group_type else 'Custom'}
 - Major Attractions to include (but not limited to): {attractions_str}
 
 Please generate the itinerary in clean Markdown format with the following guidelines:
-1. Start with a summary of the trip style, including "Best Season" (which is {destination_data['best_season']}), and a 3-4 sentence overview of what makes this destination unique for {group_type} travelers on a {budget} budget.
+1. Start with a summary of the trip style, including "Best Season" (which is {destination_data['best_season']}), and a 3-4 sentence overview of what makes this destination unique for {group_type if group_type else 'Custom'} travelers on a {budget} budget.
 2. For EACH day (Day 1 to Day {days}), outline:
    - A theme or mood for the day.
    - Specific morning, afternoon, and evening slots with times (e.g., 09:00 AM - 12:00 PM).
@@ -117,13 +164,23 @@ Please generate the itinerary in clean Markdown format with the following guidel
 Ensure the tone is warm, inviting, and highly informative. Keep the text engaging and format with clean emojis and bold labels.
 Do not mention metadata like "System Prompt" or "Here is your itinerary". Start directly with the itinerary content.
 """
+        # Append dynamic seed instruction to force Gemini to create distinct variations
+        if seed != 42:
+            prompt += f"\nNote: Please generate a unique layout/sequence variation index: {seed}. Focus on alternative local culinary highlights and offbeat sightseeing spots if possible.\n"
+
         model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.8
+            )
+        )
         
         if response and response.text:
             return response.text
         else:
-            return get_fallback_itinerary(destination_data, days, budget, group_type) + "\n\n*(Note: Gemini API returned an empty response; fell back to standard itinerary).* "
+            return get_fallback_itinerary(destination_data, days, budget, group_type, seed) + "\n\n*(Note: Gemini API returned an empty response; fell back to standard itinerary).* "
             
     except Exception as e:
-        return get_fallback_itinerary(destination_data, days, budget, group_type) + f"\n\n*(Note: Gemini API Error: {str(e)}. Fell back to standard itinerary).* "
+        return get_fallback_itinerary(destination_data, days, budget, group_type, seed) + f"\n\n*(Note: Gemini API Error: {str(e)}. Fell back to standard itinerary).* "
+
